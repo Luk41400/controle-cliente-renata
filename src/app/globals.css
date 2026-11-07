@@ -222,8 +222,7 @@ tr:hover td { background: #fafbfd; }
   .public-main { padding-top: 25px; }
 }
 @media (max-width: 600px) {
-  .sidebar-art, .public-header .header-kicker { display: none; }
-  .public-header { justify-content: flex-end; }
+  .sidebar-art { display: none; }
   .simple-header .subtle-link { font-size: .76rem; }
   .public-main, .public-footer { padding-inline: 15px; }
   .field-grid { grid-template-columns: 1fr; }

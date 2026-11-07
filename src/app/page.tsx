@@ -1,4 +1,4 @@
-import { ArrowUpRight, LockKeyhole, Scale, ShieldCheck } from "lucide-react";
+import { Scale, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { Brand } from "@/components/brand";
 import { IntakeForm } from "@/components/intake-form";
@@ -17,7 +17,6 @@ export default function Home() {
     </aside>
     <div className="public-body">
       <header className="public-header"><span className="header-kicker">PORTAL DE ATENDIMENTO</span>
-        <Link className="subtle-link" href="/admin"><LockKeyhole size={15} aria-hidden="true" /> Área do advogado <ArrowUpRight size={15} aria-hidden="true" /></Link>
       </header>
       <main className="public-main">
         <div className="eyebrow gold">NOVO ATENDIMENTO</div>
