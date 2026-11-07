@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Controle Cliente Renata", template: "%s | Controle Cliente Renata" },
+  title: { default: "Advocacia Rodrigues e Alves", template: "%s | Advocacia Rodrigues e Alves" },
   description: "Portal do escritório para cadastro de clientes e acompanhamento de atendimentos.",
 };
 

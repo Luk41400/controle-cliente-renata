@@ -1,15 +1,16 @@
 "use client";
 
-import { ArrowDownWideNarrow, ArrowLeft, ArrowRight, ArrowUpRight, BriefcaseBusiness, CircleCheck, ClipboardList, Inbox, LoaderCircle, LogOut, Search, ShieldCheck, UsersRound } from "lucide-react";
+import { Archive, ArrowDownWideNarrow, ArrowLeft, ArrowRight, ArrowUpRight, BriefcaseBusiness, CircleCheck, ClipboardList, Inbox, LoaderCircle, LogOut, Search, ShieldCheck, UsersRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, clientPath, errorMessage } from "@/lib/api";
-import { brDate, statusLabel, statusOptions, type ClientRow, type Lawyer } from "@/lib/clientes";
+import { api, ApiError, clientPath, errorMessage, type ClientActionResult } from "@/lib/api";
+import { brDate, caseLabel, statusLabel, statusOptions, type ClientRow, type Lawyer } from "@/lib/clientes";
 import { Brand } from "./brand";
 import { ClientDrawer } from "./client-drawer";
 import { StatusBadge } from "./status-badge";
+import { ClientPhoto } from "./client-photo";
 
-const initialFilters = { search: "", status: "", start: "", end: "", order: "recente", page: 0 };
-type Totals = { total: number; novos: number; andamento: number; concluidos: number };
+const initialFilters = { search: "", status: "", start: "", end: "", order: "recente", page: 0, archived: false };
+type Totals = { total: number; novos: number; andamento: number; concluidos: number; ativos: number; arquivados: number };
 type List = { stats: Totals; rows: ClientRow[]; total: number; pageSize: number };
 const cards = [
   { key: "total", label: "Total de clientes", icon: UsersRound },
@@ -26,6 +27,8 @@ export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: () => vo
   const [selected, setSelected] = useState<ClientRow>();
   const [signingOut, setSigningOut] = useState(false);
   const [exitError, setExitError] = useState("");
+  const [notice, setNotice] = useState<ClientActionResult>();
+  const [checkingDeletion, setCheckingDeletion] = useState(false);
   const key = JSON.stringify({ filters, revision });
   const current = result?.key === key ? result : undefined;
   const pageCount = current?.data ? Math.max(1, Math.ceil(current.data.total / current.data.pageSize)) : 1;
@@ -50,6 +53,33 @@ export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: () => vo
     setFilters({ ...draft, page: 0 });
   }
 
+  function selectArchive(archived: boolean) {
+    const next = { ...initialFilters, archived };
+    setDraft(next);
+    setFilters(next);
+  }
+
+  function closeDrawer() {
+    setSelected(undefined);
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) document.getElementById("clients-title")?.focus();
+    });
+  }
+
+  async function checkDeletion() {
+    if (!notice?.id || !notice.operation || checkingDeletion) return;
+    setCheckingDeletion(true);
+    try {
+      const result = await api<ClientActionResult>(clientPath, { action: "exclusao_estado", id: notice.id, operation: notice.operation });
+      setNotice(result);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) onExit();
+      else setExitError(errorMessage(error));
+    } finally {
+      setCheckingDeletion(false);
+    }
+  }
+
   async function logout() {
     if (signingOut) return;
     setSigningOut(true);
@@ -65,42 +95,55 @@ export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: () => vo
 
   return <div className="dashboard-layout">
     <aside className="admin-sidebar"><Brand dark />
-      <div className="admin-nav"><p>ESCRITÓRIO</p><span aria-current="page"><ClipboardList size={19} aria-hidden="true" /> Atendimentos</span></div>
+      <nav className="admin-nav" aria-label="Atendimentos do escritório"><p>ESCRITÓRIO</p>
+        <button type="button" aria-current={!filters.archived ? "page" : undefined} onClick={() => selectArchive(false)}><ClipboardList size={19} aria-hidden="true" /> Clientes ativos</button>
+        <button type="button" aria-current={filters.archived ? "page" : undefined} onClick={() => selectArchive(true)}><Archive size={19} aria-hidden="true" /> Clientes Arquivados</button>
+      </nav>
       <div className="admin-side-foot"><span className="sidebar-footer"><ShieldCheck size={17} aria-hidden="true" /> Área restrita</span></div>
     </aside>
     <div className="dashboard-body">
-      <header className="dashboard-header"><span className="header-kicker">CONTROLE CLIENTE RENATA</span>
+      <header className="dashboard-header"><span className="header-kicker">ADVOCACIA RODRIGUES E ALVES</span>
         <div className="account"><span className="account-name"><strong>{lawyer.nome}</strong><small>OAB {lawyer.oab_uf} {lawyer.oab_numero}</small></span>
           <button className="button secondary sign-out" disabled={signingOut} onClick={logout}><LogOut size={16} aria-hidden="true" /> {signingOut ? "Saindo…" : "Sair"}</button></div>
       </header>
       <main className="dashboard-main">
-        <div className="eyebrow gold">ÁREA DO ESCRITÓRIO</div><h1>Atendimentos</h1>
+        <div className="eyebrow gold">ÁREA DO ESCRITÓRIO</div><h1>{filters.archived ? "Clientes Arquivados" : "Atendimentos"}</h1>
         <p className="lead">Consulte os cadastros e acompanhe o andamento dos casos.</p>
         {exitError && <p className="notice notice-error" role="alert">{exitError}</p>}
+        {notice && <div className={`notice ${notice.pending ? "notice-warning" : "notice-success"}`} role="status"><p>{notice.message}</p>
+          {notice.pending && <button type="button" className="button secondary" disabled={checkingDeletion} onClick={() => void checkDeletion()}>{checkingDeletion ? "Verificando…" : "Verificar exclusão"}</button>}
+        </div>}
+        <nav className="client-tabs" aria-label="Listas de clientes">
+          <button type="button" aria-pressed={!filters.archived} onClick={() => selectArchive(false)}>Clientes ativos <span>{current?.data?.stats.ativos ?? "—"}</span></button>
+          <button type="button" aria-pressed={filters.archived} onClick={() => selectArchive(true)}>Clientes Arquivados <span>{current?.data?.stats.arquivados ?? "—"}</span></button>
+        </nav>
         <section className="stats" aria-label="Indicadores de atendimentos">
           {cards.map(({ key, label, icon: Icon }) => <div className="stat-card" key={key}>
-            <span className="section-icon"><Icon size={19} aria-hidden="true" /></span><div><p>{label}</p>
+            <span className="section-icon"><Icon size={19} aria-hidden="true" /></span><div><p>{key === "total" ? (filters.archived ? "Clientes arquivados" : "Clientes ativos") : label}</p>
               <strong>{current?.data?.stats?.[key]?.toLocaleString("pt-BR") ?? "—"}</strong></div>
           </div>)}
         </section>
         <section className="table-card" aria-labelledby="clients-title" aria-busy={!current}>
-          <div className="table-intro"><div><h2 id="clients-title" tabIndex={-1}>Clientes cadastrados</h2><p>Pesquise por nome ou combine os filtros.</p></div></div>
+          <div className="table-intro"><div><h2 id="clients-title" tabIndex={-1}>{filters.archived ? "Cadastros arquivados" : "Clientes cadastrados"}</h2><p>Pesquise por nome ou combine os filtros.</p></div></div>
           <form className="filters" onSubmit={apply} method="post" action={clientPath}>
             <div className="field"><label htmlFor="search">Nome do cliente</label><div className="search-control"><Search size={16} aria-hidden="true" /><input id="search" placeholder="Nome completo ou parcial" value={draft.search} maxLength={200} onChange={(event) => setDraft({ ...draft, search: event.target.value })} /></div></div>
             <div className="field"><label htmlFor="filter-status">Status</label><select id="filter-status" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option value="">Todos</option>{statusOptions.map((status) => <option key={status} value={status}>{statusLabel[status]}</option>)}</select></div>
             <div className="field"><label htmlFor="filter-start">A partir de</label><input type="date" id="filter-start" value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></div>
             <div className="field"><label htmlFor="filter-end">Até</label><input type="date" id="filter-end" value={draft.end} min={draft.start || undefined} onChange={(event) => setDraft({ ...draft, end: event.target.value })} /></div>
             <div className="field"><label htmlFor="filter-order">Ordenação</label><select id="filter-order" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })}><option value="recente">Mais recentes</option><option value="nome">Nome (A–Z)</option></select></div>
-            <div className="filter-actions"><button className="button primary"><Search size={16} aria-hidden="true" /> Buscar</button><button className="button secondary" type="button" onClick={() => { setDraft(initialFilters); setFilters(initialFilters); }}>Limpar</button></div>
+            <div className="filter-actions"><button className="button primary"><Search size={16} aria-hidden="true" /> Buscar</button><button className="button secondary" type="button" onClick={() => selectArchive(filters.archived)}>Limpar</button></div>
           </form>
           {!current && <p role="status" className="table-state"><LoaderCircle className="spinner" size={21} aria-hidden="true" /> Carregando cadastros…</p>}
           {current?.error && <div className="table-state"><p role="alert">{current.error}</p><button className="button secondary" onClick={() => setRevision(revision + 1)}>Tentar novamente</button></div>}
           {current?.data && (current.data.rows.length ? <>
-            <table><thead><tr><th scope="col">Nome do cliente</th><th scope="col">Data do cadastro</th><th scope="col">Status</th><th scope="col">Ações</th></tr></thead>
+            <table><thead><tr><th scope="col">Nome do cliente</th><th scope="col">Data do cadastro</th><th scope="col">Tipo de caso</th><th scope="col">Status</th>{filters.archived && <th scope="col">Arquivado em</th>}<th scope="col">Ações</th></tr></thead>
               <tbody>{current.data.rows.map((row) => <tr key={row.id}>
-                <td><button className="text-button client-name" onClick={() => setSelected(row)}>{row.nome}</button></td>
-                <td>{brDate.format(new Date(row.criado_em))}</td><td><StatusBadge status={row.status} /></td>
-                <td><button className="text-button row-action" onClick={() => setSelected(row)} aria-label={`Visualizar ${row.nome}`}>Visualizar <ArrowUpRight size={15} aria-hidden="true" /></button></td>
+                <td className="client-identity"><div className="client-cell"><ClientPhoto id={row.id} hasPhoto={row.tem_foto} revision={String(revision)} /><button className="text-button client-name" onClick={() => setSelected(row)}>{row.nome}</button></div></td>
+                <td className="client-date">{brDate.format(new Date(row.criado_em))}</td>
+                <td className="client-type">{row.tipo_caso ? caseLabel[row.tipo_caso] : "Não informado"}</td>
+                <td className="client-status"><StatusBadge status={row.status} /></td>
+                {filters.archived && <td className="client-archived">{row.arquivado_em ? brDate.format(new Date(row.arquivado_em)) : "—"}</td>}
+                <td className="client-action"><button className="text-button row-action" onClick={() => setSelected(row)} aria-label={`Visualizar ${row.nome}`}>Visualizar <ArrowUpRight size={15} aria-hidden="true" /></button></td>
               </tr>)}</tbody>
             </table>
             <nav className="pagination" aria-label="Paginação de clientes">
@@ -114,12 +157,8 @@ export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: () => vo
       </main>
     </div>
     {selected && <ClientDrawer key={selected.id} row={selected} canEdit={lawyer.permissao === "gestao"} onExit={onExit}
-      onClose={() => {
-        setSelected(undefined);
-        requestAnimationFrame(() => {
-          if (document.activeElement === document.body) document.getElementById("clients-title")?.focus();
-        });
-      }} onChange={() => setRevision((value) => value + 1)} />}
+      onClose={closeDrawer} onChange={() => setRevision((value) => value + 1)}
+      onCompleted={(result) => { closeDrawer(); setNotice(result); setRevision((value) => value + 1); }} />}
   </div>;
 }
 

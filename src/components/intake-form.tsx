@@ -8,7 +8,7 @@ import { emptyClient, fields, validateClient, type Field, type FieldErrors } fro
 import { ClientFields } from "./client-fields";
 
 const sections = [
-  { id: "01", title: "Identificação", icon: UserRound, names: ["nome", "nome_social", "rg", "cpf"] },
+  { id: "01", title: "Identificação", icon: UserRound, names: ["nome", "nome_social", "rg", "cpf", "tipo_caso"] },
   { id: "02", title: "Endereço e origem", icon: MapPin, names: ["endereco", "filiacao", "nacionalidade", "cidade_nascimento"] },
   { id: "03", title: "Sobre o seu caso", icon: FileText, names: ["caso_juridico"] },
 ] satisfies { id: string; title: string; icon: typeof UserRound; names: Field[] }[];

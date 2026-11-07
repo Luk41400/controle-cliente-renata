@@ -25,7 +25,7 @@ export default function Home() {
         <p className="required-legend"><span className="required">*</span> Campos obrigatórios</p>
         <IntakeForm />
       </main>
-      <footer className="public-footer"><span>Controle Cliente Renata</span><Link href="/privacidade">Política de Privacidade</Link></footer>
+      <footer className="public-footer"><span>Advocacia Rodrigues e Alves</span><Link href="/privacidade">Política de Privacidade</Link></footer>
     </div>
   </div>;
 }

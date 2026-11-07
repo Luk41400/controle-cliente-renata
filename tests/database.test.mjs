@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
+import { authFixture } from "./database-fixture.mjs";
 
 const structure = new URL("../supabase/testes/estrutura.sql", import.meta.url);
 const migrations = new URL("../supabase/migrations/", import.meta.url);
@@ -23,20 +24,6 @@ const client = {
   cidade_nascimento: "São Paulo", caso_juridico: "Primeira linha sintética.\nSegunda linha do caso de teste.",
 };
 
-const authFixture = `
-  create role anon;
-  create role authenticated;
-  create role service_role bypassrls;
-  create schema auth;
-  grant usage on schema auth to authenticated, service_role, anon;
-  create table auth.users(id uuid primary key);
-  create table auth.sessions(id uuid primary key, user_id uuid references auth.users(id), created_at timestamptz default now(), not_after timestamptz);
-  create function auth.jwt() returns jsonb language sql stable
-    as $$ select coalesce(nullif(current_setting('request.jwt.claims', true),''), '{}')::jsonb $$;
-  create function auth.uid() returns uuid language sql stable
-    as $$ select (auth.jwt() ->> 'sub')::uuid $$;
-`;
-
 test("migração, operações, permissões e auditoria em PostgreSQL descartável", async (t) => {
   const db = await PGlite.create({ extensions: { pg_trgm } });
   t.after(() => db.close());
@@ -50,7 +37,7 @@ test("migração, operações, permissões e auditoria em PostgreSQL descartáve
     alter table adv_clientes enable row level security;
     create policy antiga on adv_clientes using (true) with check (true);
     grant select (id), update (status) on adv_clientes to anon, authenticated;
-    insert into auth.users values ('${manager}'), ('${reader}'), ('${unknown}');
+    insert into auth.users(id) values ('${manager}'), ('${reader}'), ('${unknown}');
     insert into auth.sessions(id,user_id) values ('${managerSession}','${manager}'), ('${readerSession}','${reader}'), ('${unknownSession}','${unknown}');
     insert into adv_advogados (id,auth_user_id,nome,email_login,oab_numero,oab_uf,ativo) values
       ('${lawyerId}','${manager}','Advogada de Teste','gestao@example.test','00123-A','SP',true),
@@ -159,5 +146,90 @@ test("migração, operações, permissões e auditoria em PostgreSQL descartáve
         assert.equal((await db.query("select id from adv_auditoria")).rows.length, 0);
       }, user, session);
     }
+  });
+
+  const bootstrap = await readFile(new URL("../supabase/primeiro-advogado.sql", import.meta.url), "utf8");
+  const firstLawyer = {
+    auth_user_id: manager, nome: "Advogada de Teste", oab_numero: "00123-A", oab_uf: "SP", email: "gestao@example.test",
+  };
+  async function provision(config = { auth_user_id: null, nome: "", oab_numero: "", oab_uf: "", email: "" }) {
+    const script = bootstrap.replace(/\$cadastro\$[\s\S]*?\$cadastro\$/, () => "$cadastro$" + JSON.stringify(config) + "$cadastro$");
+    try {
+      await db.exec(script);
+    } catch (error) {
+      await db.exec("rollback");
+      throw error;
+    }
+  }
+  async function clientsFingerprint() {
+    const result = [];
+    for (const table of ["adv_clientes", "adv_observacoes", "adv_auditoria"]) {
+      const { rows } = await db.query(`select md5(coalesce(jsonb_agg(to_jsonb(c) order by c.id)::text, '[]')) as assinatura from public.${table} c`);
+      result.push(rows[0].assinatura);
+    }
+    return result;
+  }
+  await db.exec(`
+    update auth.users set email = 'gestao@example.test', email_confirmed_at = now() where id = '${manager}';
+    update auth.users set email = 'consulta@example.test', email_confirmed_at = now() where id = '${reader}';
+    update auth.users set email = 'novo@example.test', email_confirmed_at = now() where id = '${unknown}';
+    insert into auth.sessions(id,user_id) values ('${readerSession}','${reader}');
+  `);
+  const preservedClients = await clientsFingerprint();
+
+  await t.test("primeiro acesso exige preenchimento, conta confirmada e vínculo de e-mail correto", async () => {
+    await assert.rejects(provision(), /Preencha o UUID/);
+    await assert.rejects(provision({ ...firstLawyer, email: "outra@example.test" }), /e-mail informado deve corresponder/);
+    await assert.rejects(provision({ ...firstLawyer, auth_user_id: submission }), /não corresponde a uma conta/);
+    await db.query("update auth.users set email_confirmed_at = null where id = $1", [manager]);
+    await assert.rejects(provision(firstLawyer), /Confirme o e-mail/);
+    await db.query("update auth.users set email_confirmed_at = now() where id = $1", [manager]);
+    assert.deepEqual(await clientsFingerprint(), preservedClients);
+  });
+
+  await t.test("autorização exclusiva é repetível, mantém o perfil existente e recusa conflitos sem alterações parciais", async () => {
+    await db.query("update adv_advogados set ativo = true where id = $1", [readerId]);
+    await assert.rejects(provision({ ...firstLawyer, oab_numero: "345" }), /já pertence a outro perfil/);
+    assert.equal((await db.query("select ativo from adv_advogados where id=$1", [readerId])).rows[0].ativo, true);
+    await provision(firstLawyer);
+    await provision(firstLawyer);
+    const active = (await db.query("select id,auth_user_id,permissao from adv_advogados where ativo")).rows;
+    assert.deepEqual(active, [{ id: lawyerId, auth_user_id: manager, permissao: "gestao" }]);
+    await withRole("authenticated", async () => {
+      assert.equal((await queryIds()).rows.length, 2);
+    }, manager, managerSession);
+    await withRole("authenticated", async () => {
+      assert.equal((await queryIds()).rows.length, 0);
+      assert.equal((await db.query("select id from adv_observacoes")).rows.length, 0);
+      assert.equal((await db.query("select id from adv_auditoria")).rows.length, 0);
+    }, reader, readerSession);
+    assert.deepEqual(await clientsFingerprint(), preservedClients);
+  });
+
+  await t.test("cadastro de novo perfil usa o UUID do Auth e somente administradores podem executar o procedimento", async () => {
+    const config = { auth_user_id: unknown, nome: "Advogada Nova", oab_numero: "987", oab_uf: "RJ", email: "novo@example.test" };
+    await withRole("anon", async () => {
+      await assert.rejects(provision(config), /permission denied/);
+    });
+    await withRole("authenticated", async () => {
+      await assert.rejects(provision(config), /permission denied/);
+    }, reader, readerSession);
+    await db.exec("alter table adv_advogados add constraint teste_autorizacao_interrompida check (oab_numero <> '987')");
+    try {
+      await assert.rejects(provision(config), /teste_autorizacao_interrompida/);
+      assert.equal((await db.query("select auth_user_id from adv_advogados where ativo")).rows[0].auth_user_id, manager);
+    } finally {
+      await db.exec("alter table adv_advogados drop constraint teste_autorizacao_interrompida");
+    }
+    await provision(config);
+    const active = (await db.query("select auth_user_id,ativo,permissao from adv_advogados where ativo")).rows;
+    assert.deepEqual(active, [{ auth_user_id: unknown, ativo: true, permissao: "gestao" }]);
+    await withRole("authenticated", async () => {
+      assert.equal((await queryIds()).rows.length, 2);
+    }, unknown, unknownSession);
+    await withRole("authenticated", async () => {
+      assert.equal((await queryIds()).rows.length, 0);
+    }, manager, managerSession);
+    assert.deepEqual(await clientsFingerprint(), preservedClients);
   });
 });

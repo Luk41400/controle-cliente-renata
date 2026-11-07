@@ -20,6 +20,7 @@ credentials*.json
 service-account*.json
 secrets.*
 *.local.json
+*.local.sql
 .vercel/
 .local-tools/
 supabase/.temp/
