@@ -9,7 +9,7 @@ export async function adminFixture(page, { missingDocuments = true, canDelete = 
   const state = {
     authenticated: false, exists: true, canDelete, deletionPending: false, photoSaves: 0, photoRemovals: 0, archiveCalls: 0, deletionCalls: 0,
     client: { ...row, nome_social: null, endereco: "Endereço sintético", rg: missingDocuments ? null : "RG-TESTE", cpf: missingDocuments ? null : "52998224725",
-      filiacao: "Filiação sintética", nacionalidade: "Brasileira", cidade_nascimento: "São Paulo", caso_juridico: "Relato jurídico completo de teste.", foto_path: null, versao: 0 },
+      filiacao: "Filiação sintética", nacionalidade: "Brasileira", cidade_nascimento: "São Paulo", caso_juridico: "Relato jurídico completo de teste.", andamento_caso: null, foto_path: null, versao: 0 },
     notes: [],
     history: [{ id: "cadastro", acao: "cadastro", advogado_nome: null, criado_em: row.criado_em, detalhes: {} }],
   };
@@ -35,7 +35,7 @@ export async function adminFixture(page, { missingDocuments = true, canDelete = 
       } } });
     }
     if (data.action === "editar") {
-      const changed = ["nome","nome_social","endereco","rg","cpf","filiacao","nacionalidade","cidade_nascimento","tipo_caso","caso_juridico"].filter((key) => Object.hasOwn(data,key));
+      const changed = ["nome","nome_social","endereco","rg","cpf","filiacao","nacionalidade","cidade_nascimento","tipo_caso","caso_juridico","andamento_caso"].filter((key) => Object.hasOwn(data,key));
       for (const key of changed) state.client[key] = data[key] || null;
       state.client.versao++;
       event("atualizacao", { campos: changed });

@@ -16,6 +16,7 @@ export const fields = [
   { key: "nacionalidade", label: "Nacionalidade", min: 2, limit: 80, required: true, placeholder: "Ex.: brasileira", autocomplete: "off" },
   { key: "cidade_nascimento", label: "Cidade de nascimento", min: 2, limit: 150, required: true, placeholder: "Cidade e UF ou país", autocomplete: "off" },
   { key: "caso_juridico", label: "Caso Jurídico", min: 10, limit: 12000, required: true, placeholder: "Descreva sua situação com suas próprias palavras…", autocomplete: "off" },
+  { key: "andamento_caso", label: "Andamento do caso", min: 0, limit: null, required: false, placeholder: "Descreva o andamento do caso...", autocomplete: "off" },
 ] as const;
 
 export type Field = (typeof fields)[number]["key"];
@@ -24,8 +25,8 @@ export type FieldErrors = Partial<Record<Field, string>>;
 export type ClientRow = Pick<ClientInput, "nome"> & {
   id: string; criado_em: string; status: Status; tipo_caso: CaseType | null; arquivado_em: string | null; tem_foto: boolean;
 };
-export type Client = ClientRow & Omit<ClientInput, "nome" | "nome_social" | "rg" | "cpf" | "tipo_caso"> & {
-  nome_social: string | null; rg: string | null; cpf: string | null; versao: number; foto_path: string | null;
+export type Client = ClientRow & Omit<ClientInput, "nome" | "nome_social" | "rg" | "cpf" | "tipo_caso" | "andamento_caso"> & {
+  nome_social: string | null; rg: string | null; cpf: string | null; andamento_caso: string | null; versao: number; foto_path: string | null;
 };
 export type Lawyer = { nome: string; oab_numero: string; oab_uf: string; permissao: "consulta" | "gestao" };
 export type Note = { id: string; texto: string; advogado_nome: string; criado_em: string };
@@ -82,14 +83,14 @@ export function validateClient(input: Record<string, unknown>, partial = false) 
       if (required || raw != null) errors[key] = "Informe um valor válido.";
       continue;
     }
-    const value = raw.trim();
+    const value = key === "andamento_caso" && raw.trim() ? raw : raw.trim();
     if (!required && !value) continue;
     if (key === "tipo_caso") {
       if (!isCaseType(value)) errors[key] = "Selecione Administrativo ou Judicial.";
       else data[key] = value;
     } else if (required && !value) errors[key] = "Preencha este campo.";
     else if ([...value].length < min) errors[key] = `Informe pelo menos ${min} caracteres.`;
-    else if (value.length > limit) errors[key] = `Use até ${limit} caracteres.`;
+    else if (limit !== null && value.length > limit) errors[key] = `Use até ${limit} caracteres.`;
     else if (value.includes("\0") || /\p{Cs}/u.test(value)) errors[key] = "Remova caracteres inválidos.";
     else if (key === "cpf") {
       const digits = value.replace(/\D/g, "");

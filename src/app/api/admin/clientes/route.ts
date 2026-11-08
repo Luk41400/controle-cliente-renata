@@ -7,7 +7,7 @@ type Authorized = Awaited<ReturnType<typeof requireLawyer>>;
 type Database = Authorized["client"];
 const PAGE_SIZE = 12;
 const TIMELINE_SIZE = 10;
-const detailColumns = "id,nome,nome_social,endereco,rg,cpf,filiacao,nacionalidade,cidade_nascimento,tipo_caso,caso_juridico,criado_em,status,versao,foto_path,arquivado_em";
+const detailColumns = "id,nome,nome_social,endereco,rg,cpf,filiacao,nacionalidade,cidade_nascimento,tipo_caso,caso_juridico,andamento_caso,criado_em,status,versao,foto_path,arquivado_em";
 
 function pageIndex(value: unknown) {
   if (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 100_000) return Number(value);
@@ -81,7 +81,7 @@ async function update(db: Database, id: string, input: Record<string, unknown>) 
     if (!valid) return json({ message: "Confira os campos indicados.", errors }, 422);
     const changedFields = fields.filter(({ key }) => Object.hasOwn(input, key));
     if (!changedFields.length) return problem("Altere algum campo antes de salvar.", 422);
-    changes = Object.fromEntries(changedFields.map(({ key }) => [key, ["nome_social", "rg", "cpf"].includes(key) ? data[key] || null : data[key]]));
+    changes = Object.fromEntries(changedFields.map(({ key }) => [key, ["nome_social", "rg", "cpf", "andamento_caso"].includes(key) ? data[key] || null : data[key]]));
   }
   const { data, error } = await db.from("adv_clientes").update(changes).eq("id", id)
     .eq("versao", version).select(detailColumns).maybeSingle();
@@ -103,8 +103,8 @@ async function deletionState(db: Database, id: string, operation: string) {
 
 export async function POST(request: Request) {
   try {
-    const input = await body(request);
     const { client, lawyer, lawyerId } = await requireLawyer();
+    const input = await body(request, 3_500_000);
     if (input.action === "listar") return await dashboard(client, input);
     if (!isUuid(input.id)) return problem("Cadastro inválido.", 422);
     if (input.action === "detalhes") return await details(client, input.id);

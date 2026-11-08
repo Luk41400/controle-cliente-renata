@@ -30,7 +30,7 @@ export function ClientDrawer({ row, canEdit, onClose, onChange, onExit, onComple
   const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<ClientInput>();
   const [editingFields, setEditingFields] = useState<Field[]>(fields.map(({ key }) => key));
-  const [editLocation, setEditLocation] = useState<"personal" | "type">("personal");
+  const [editLocation, setEditLocation] = useState<"personal" | "type" | "progress">("personal");
   const [confirmation, setConfirmation] = useState<"arquivar" | "restaurar" | "excluir">();
   const deletionAttempt = useRef<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -122,7 +122,7 @@ export function ClientDrawer({ row, canEdit, onClose, onChange, onExit, onComple
   }
 
   const client = detail?.client;
-  function beginEdit(names: Field[], location: "personal" | "type" = "personal") {
+  function beginEdit(names: Field[], location: "personal" | "type" | "progress" = "personal") {
     if (!client || busy || loading) return;
     setErrors({});
     setEditing(editableValues(client));
@@ -164,7 +164,7 @@ export function ClientDrawer({ row, canEdit, onClose, onChange, onExit, onComple
       return;
     }
     const validated = Object.fromEntries(changed.map(({ key }) => [key, result.data[key]]));
-    if (window.confirm("Salvar as alterações neste cadastro?")) void save({ action: "editar", version: client.versao, ...validated });
+    if (editLocation === "progress" || window.confirm("Salvar as alterações neste cadastro?")) void save({ action: "editar", version: client.versao, ...validated });
   }
 
   const editForm = editing && <form onSubmit={saveEdit} method="post" action={clientPath} noValidate>
@@ -173,7 +173,7 @@ export function ClientDrawer({ row, canEdit, onClose, onChange, onExit, onComple
         setEditing({ ...editing, [key]: value });
         setErrors({ ...errors, [key]: undefined });
       }} /></div>
-      <div className="inline-actions"><button className="button primary">{busy ? "Salvando…" : "Salvar informações"}</button>
+      <div className="inline-actions"><button className="button primary">{busy ? "Salvando…" : editLocation === "progress" ? "Salvar" : "Salvar informações"}</button>
         <button type="button" className="button secondary" onClick={() => setEditing(undefined)}>Cancelar</button></div>
     </fieldset>
   </form>;
@@ -206,8 +206,8 @@ export function ClientDrawer({ row, canEdit, onClose, onChange, onExit, onComple
         </form>}
         <section className="drawer-section" aria-labelledby="details-personal">
           <div className="drawer-section-title"><h3 id="details-personal"><UserRound size={18} aria-hidden="true" /> Informações pessoais</h3>
-            {canEdit && !editing && <button className="button secondary" disabled={busy || loading || conflict} onClick={() => beginEdit(fields.map(({ key }) => key))}><Pencil size={15} aria-hidden="true" /> Editar</button>}</div>
-          {editing && editLocation === "personal" ? editForm : <dl className="detail-grid">{fields.filter(({ key }) => key !== "caso_juridico" && key !== "tipo_caso").map(({ key, label }) =>
+            {canEdit && !editing && <button className="button secondary" disabled={busy || loading || conflict} onClick={() => beginEdit(fields.filter(({ key }) => key !== "andamento_caso").map(({ key }) => key))}><Pencil size={15} aria-hidden="true" /> Editar</button>}</div>
+          {editing && editLocation === "personal" ? editForm : <dl className="detail-grid">{fields.filter(({ key }) => key !== "caso_juridico" && key !== "tipo_caso" && key !== "andamento_caso").map(({ key, label }) =>
             <div className={key === "endereco" ? "field-wide" : ""} key={key}><dt>{label}</dt><dd>
               <span>{(key === "cpf" && /^\d{11}$/.test(client.cpf ?? "") ? maskCpf(client.cpf ?? "") : client[key]) || "Não informado"}</span>
               {canEdit && !editing && (key === "rg" || key === "cpf") && <button type="button" className="text-button document-action" disabled={busy || loading || conflict}
@@ -219,6 +219,10 @@ export function ClientDrawer({ row, canEdit, onClose, onChange, onExit, onComple
           {editing && editLocation === "type" ? editForm : <p>{client.tipo_caso ? caseLabel[client.tipo_caso] : "Não informado"}</p>}
         </section>
         {!editing && <section className="drawer-section"><h3><FileText size={18} aria-hidden="true" /> Caso Jurídico</h3><p className="case-text">{client.caso_juridico}</p></section>}
+        <section className="drawer-section" aria-labelledby="details-progress">
+          <div className="drawer-section-title"><h3 id="details-progress">Andamento do caso</h3>{canEdit && !editing && <button type="button" className="button secondary" disabled={busy || loading || conflict} onClick={() => beginEdit(["andamento_caso"], "progress")}><Pencil size={15} aria-hidden="true" />Editar andamento</button>}</div>
+          {editing && editLocation === "progress" ? editForm : <p className={client.andamento_caso ? "case-text" : "muted"}>{client.andamento_caso || "Nenhum andamento registrado"}</p>}
+        </section>
         <section className="drawer-section"><h3>Observações internas</h3>
           {canEdit && <form className="note-form" method="post" action={clientPath} onSubmit={(event) => {
             event.preventDefault();

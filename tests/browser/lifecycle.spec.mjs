@@ -47,7 +47,7 @@ test("documentos e tipo podem ser acrescentados, corrigidos e consultados novame
   await drawer.getByRole("radio", { name: "Judicial", exact: true }).check();
   page.once("dialog", (dialog) => dialog.accept());
   await drawer.getByRole("button", { name: "Salvar informações" }).click();
-  await expect(drawer.getByText("Judicial", { exact: true })).toBeVisible();
+  await expect(drawer.getByLabel("Classificação do caso")).toHaveText("Judicial");
   await drawer.getByRole("button", { name: "Editar RG", exact: true }).click();
   await drawer.getByLabel("RG Opcional").fill("");
   page.once("dialog", (dialog) => dialog.accept());

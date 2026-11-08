@@ -18,7 +18,7 @@ test("cadastro móvel, navegação por teclado e validação real do endpoint", 
   await expect(page.getByRole("heading", { name: "Cadastro de Clientes" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await expect(page.getByRole("link", { name: "Advocacia Rodrigues e Alves, página inicial" })).toBeVisible();
-  await expect(page.locator("form input:not([type=radio]), form textarea")).toHaveCount(9);
+  await expect(page.locator("form input:not([type=radio]):not([type=file]), form textarea")).toHaveCount(10);
   await expect(page.getByRole("radio", { name: "Administrativo" })).not.toBeChecked();
   await expect(page.getByRole("radio", { name: "Judicial" })).not.toBeChecked();
   await page.getByRole("button", { name: "Enviar cadastro" }).click();
