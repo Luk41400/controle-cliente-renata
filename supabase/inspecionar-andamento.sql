@@ -159,23 +159,23 @@ politicas(tabela,nome,comando,papeis,expressao,checagem) as (values ('public.adv
 ('storage.objects','renata_fotos_remocao_servidor','d','authenticated','(bucket_id <> ''fotos-clientes''::text)',''),
 ('storage.objects','renata_fotos_restricao_leitura','r','authenticated','((bucket_id <> ''fotos-clientes''::text) OR renata_privado.pode_ler_foto(name))',''),
 ('storage.objects','renata_fotos_sem_publico','*','anon','(bucket_id <> ''fotos-clientes''::text)','(bucket_id <> ''fotos-clientes''::text)')),
-acls(assinatura,anon,authenticated,servico) as (values ('public.adv_cliente_arquivar(uuid, integer, boolean)',false,true,false),
-('public.adv_cliente_excluir(uuid, integer, uuid)',false,true,false),
-('public.adv_cliente_exclusao_estado(uuid)',false,true,false),
-('public.adv_cliente_pode_excluir(uuid)',false,true,false),
-('public.adv_foto_concluir(uuid)',false,true,false),
-('public.adv_foto_preparar(uuid, integer, uuid, text)',false,true,false),
-('public.adv_foto_remover(uuid, integer)',false,true,false),
+acls(assinatura,anon,authenticated,servico) as (values ('public.adv_cliente_arquivar(uuid, integer, boolean)',false,true,null::boolean),
+('public.adv_cliente_excluir(uuid, integer, uuid)',false,true,null::boolean),
+('public.adv_cliente_exclusao_estado(uuid)',false,true,null::boolean),
+('public.adv_cliente_pode_excluir(uuid)',false,true,null::boolean),
+('public.adv_foto_concluir(uuid)',false,true,null::boolean),
+('public.adv_foto_preparar(uuid, integer, uuid, text)',false,true,null::boolean),
+('public.adv_foto_remover(uuid, integer)',false,true,null::boolean),
 ('public.adv_limitar_tentativas(text, integer, integer)',false,false,true),
-('public.adv_listar_clientes(text, text, date, date)',false,true,false),
-('public.adv_listar_clientes_v2(text, text, date, date, boolean)',false,true,false),
+('public.adv_listar_clientes(text, text, date, date)',false,true,null::boolean),
+('public.adv_listar_clientes_v2(text, text, date, date, boolean)',false,true,null::boolean),
 ('public.adv_registrar_cliente(jsonb, uuid, text)',false,false,true),
 ('public.adv_storage_concluir(uuid[], uuid[])',false,false,true),
 ('public.adv_storage_finalizar_exclusoes(uuid)',false,false,true),
 ('public.adv_storage_pendentes(uuid)',false,false,true),
 ('public.adv_storage_recolher(uuid)',false,false,true),
-('public.adv_totais_clientes()',false,true,false),
-('public.adv_totais_clientes_v2(boolean)',false,true,false),
+('public.adv_totais_clientes()',false,true,null::boolean),
+('public.adv_totais_clientes_v2(boolean)',false,true,null::boolean),
 ('renata_privado.arquivar(uuid, integer, boolean)',false,true,false),
 ('renata_privado.auditar()',false,false,false),
 ('renata_privado.cliente_para_alterar(uuid, integer)',false,false,false),
@@ -197,12 +197,24 @@ checagens as (
  union all
  select 'coluna:'||c.tabela||'.'||c.coluna, exists(select 1 from pg_attribute a where a.attrelid=to_regclass(c.tabela) and a.attname=c.coluna and a.attnum>0 and not a.attisdropped and a.atttypid=to_regtype(c.tipo)), 'Tipo esperado: '||c.tipo from colunas c
  union all
- select 'funcao:'||f.assinatura, exists(select 1 from pg_proc p where p.oid=to_regprocedure(f.assinatura) and p.prokind='f' and p.prosecdef=f.definer and (not f.definer or ('search_path=""'=any(p.proconfig) and not pg_has_role('anon',p.proowner,'USAGE') and not pg_has_role('authenticated',p.proowner,'USAGE'))) and pg_get_function_result(p.oid)=f.resultado and (f.hash_esperado is null or md5(replace(p.prosrc,chr(13),''))=f.hash_esperado)),
+ select 'funcao:'||f.assinatura, exists(select 1 from pg_proc p where p.oid=to_regprocedure(f.assinatura) and p.prokind='f' and p.prosecdef=f.definer and (not f.definer or ('search_path=""'=any(p.proconfig) and not pg_has_role('anon',p.proowner,'USAGE') and not pg_has_role('authenticated',p.proowner,'USAGE'))) and (pg_get_function_result(p.oid)=f.resultado or (f.resultado='adv_clientes' and p.prorettype=to_regtype('public.adv_clientes') and not p.proretset)) and (f.hash_esperado is null or md5(replace(p.prosrc,chr(13),''))=f.hash_esperado)),
    'Assinatura/segurança/retorno' || case when f.hash_esperado is null then '.' else '; hash esperado '||f.hash_esperado||', atual '||coalesce((select md5(replace(p.prosrc,chr(13),'')) from pg_proc p where p.oid=to_regprocedure(f.assinatura)),'ausente') end from funcoes f
  union all
  select 'politica:'||p.tabela||'.'||p.nome, exists(select 1 from pg_policy x where x.polrelid=to_regclass(p.tabela) and x.polname=p.nome and not x.polpermissive and x.polcmd::text=p.comando
    and (select string_agg(case when r=0 then 'PUBLIC' else pg_get_userbyid(r) end,',' order by r) from unnest(x.polroles) r)=p.papeis
-   and coalesce(pg_get_expr(x.polqual,x.polrelid),'')=p.expressao and coalesce(pg_get_expr(x.polwithcheck,x.polrelid),'')=p.checagem), 'Política restritiva, papéis e expressões esperados.' from politicas p
+   and (
+     (coalesce(pg_get_expr(x.polqual,x.polrelid),'')=p.expressao and coalesce(pg_get_expr(x.polwithcheck,x.polrelid),'')=p.checagem)
+     or (p.nome in ('renata_auditoria_cliente_visivel','renata_observacao_cliente_visivel','renata_restringir_observacoes_insercao')
+       and btrim(regexp_replace(replace(replace(coalesce(pg_get_expr(x.polqual,x.polrelid),''),'public.adv_clientes','adv_clientes'),'public.adv_advogados','adv_advogados'),'[[:space:]]+',' ','g'))=btrim(regexp_replace(replace(replace(p.expressao,'public.adv_clientes','adv_clientes'),'public.adv_advogados','adv_advogados'),'[[:space:]]+',' ','g'))
+       and btrim(regexp_replace(replace(replace(coalesce(pg_get_expr(x.polwithcheck,x.polrelid),''),'public.adv_clientes','adv_clientes'),'public.adv_advogados','adv_advogados'),'[[:space:]]+',' ','g'))=btrim(regexp_replace(replace(replace(p.checagem,'public.adv_clientes','adv_clientes'),'public.adv_advogados','adv_advogados'),'[[:space:]]+',' ','g')))
+   )
+   -- Nas três políticas com subconsultas, confirme as relações reais por OID.
+   -- Não remova parênteses, operadores, casts, literais ou cláusulas da condição.
+   and (p.nome not in ('renata_auditoria_cliente_visivel','renata_observacao_cliente_visivel','renata_restringir_observacoes_insercao') or
+     coalesce((select array_agg(distinct n.nspname||'.'||r.relname order by n.nspname||'.'||r.relname)
+       from pg_depend d join pg_class r on r.oid=d.refobjid join pg_namespace n on n.oid=r.relnamespace
+       where d.classid='pg_catalog.pg_policy'::regclass and d.objid=x.oid and d.refclassid='pg_catalog.pg_class'::regclass and d.refobjid<>x.polrelid),array[]::text[])
+     =case when p.nome='renata_restringir_observacoes_insercao' then array['public.adv_advogados'] else array['public.adv_clientes'] end)), 'Política restritiva, papéis e expressões esperados.' from politicas p
  union all
  select 'rls:'||r.nome, coalesce(c.relrowsecurity,false), 'RLS precisa estar habilitado.' from relacoes r left join pg_class c on c.oid=to_regclass(r.nome) where r.nome not like 'auth.%'
  union all
@@ -242,7 +254,7 @@ checagens as (
  union all
  select 'servico_lock_cliente',has_any_column_privilege('service_role',to_regclass('public.adv_clientes'),'UPDATE'),'SELECT FOR UPDATE do finalizador existente exige UPDATE em pelo menos uma coluna.'
  union all
- select 'acl_funcao:'||f.assinatura,has_function_privilege('anon',to_regprocedure(f.assinatura),'EXECUTE')=f.anon and has_function_privilege('authenticated',to_regprocedure(f.assinatura),'EXECUTE')=f.authenticated and has_function_privilege('service_role',to_regprocedure(f.assinatura),'EXECUTE')=f.servico,'EXECUTE deve corresponder aos papéis definidos pelas migrações anteriores.' from acls f
+ select 'acl_funcao:'||f.assinatura,has_function_privilege('anon',to_regprocedure(f.assinatura),'EXECUTE')=f.anon and has_function_privilege('authenticated',to_regprocedure(f.assinatura),'EXECUTE')=f.authenticated and (f.servico is null or has_function_privilege('service_role',to_regprocedure(f.assinatura),'EXECUTE')=f.servico),'Anon/authenticated devem corresponder ao esperado. Service_role opcional somente nas 11 RPCs públicas invoker; isso não altera grants.' from acls f
  union all
  select 'rpc_servico:'||f.assinatura, has_function_privilege('service_role',to_regprocedure(f.assinatura),'EXECUTE') and not has_function_privilege('anon',to_regprocedure(f.assinatura),'EXECUTE') and not has_function_privilege('authenticated',to_regprocedure(f.assinatura),'EXECUTE'), 'RPC deve ser exclusiva de service_role.' from funcoes f where f.assinatura like 'public.adv_storage_%' or f.assinatura like 'public.adv_registrar_cliente(%' or f.assinatura like 'public.adv_limitar_tentativas(%'
  union all

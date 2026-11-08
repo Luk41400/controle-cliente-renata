@@ -16,9 +16,10 @@ export const authFixture = `
     as $$ select (auth.jwt() ->> 'sub')::uuid $$;
 `;
 
-export async function featureDatabase() {
+export async function featureDatabase({ publicFunctionDefaults = false } = {}) {
   const db = await PGlite.create({ extensions: { pg_trgm } });
   await db.exec(authFixture);
+  if (publicFunctionDefaults) await db.exec("alter default privileges in schema public grant execute on functions to service_role");
   await db.exec(await readFile(new URL("../supabase/testes/estrutura.sql", import.meta.url), "utf8"));
   await db.exec(await readFile(new URL("../supabase/migrations/20261106223752_adv_protecao_e_operacoes.sql", import.meta.url), "utf8"));
   // Reprodução de metadados do Storage. Os objetos binários são testados separadamente.
