@@ -1,13 +1,17 @@
 export const statusOptions = ["novo", "em_andamento", "concluido"] as const;
 export type Status = (typeof statusOptions)[number];
 export const statusLabel: Record<Status, string> = { novo: "Novo", em_andamento: "Em andamento", concluido: "Concluído" };
+export const caseOptions = ["administrativo", "judicial"] as const;
+export type CaseType = (typeof caseOptions)[number];
+export const caseLabel: Record<CaseType, string> = { administrativo: "Administrativo", judicial: "Judicial" };
 
 export const fields = [
   { key: "nome", label: "Nome completo", min: 2, limit: 200, required: true, placeholder: "Como consta no documento", autocomplete: "name" },
   { key: "nome_social", label: "Nome Social", min: 0, limit: 200, required: false, placeholder: "Como prefere ser chamado(a)", autocomplete: "nickname" },
   { key: "endereco", label: "Endereço", min: 5, limit: 500, required: true, placeholder: "Rua, número, complemento, bairro, cidade, UF e CEP", autocomplete: "street-address" },
-  { key: "rg", label: "RG", min: 3, limit: 35, required: true, placeholder: "Número do documento", autocomplete: "off" },
-  { key: "cpf", label: "CPF", min: 0, limit: 14, required: true, placeholder: "000.000.000-00", autocomplete: "off" },
+  { key: "rg", label: "RG", min: 3, limit: 35, required: false, placeholder: "Número do documento", autocomplete: "off" },
+  { key: "cpf", label: "CPF", min: 0, limit: 14, required: false, placeholder: "000.000.000-00", autocomplete: "off" },
+  { key: "tipo_caso", label: "Tipo de caso jurídico", min: 1, limit: 20, required: true, placeholder: "", autocomplete: "off" },
   { key: "filiacao", label: "Filiação", min: 2, limit: 360, required: true, placeholder: "Nome dos pais ou responsáveis", autocomplete: "off" },
   { key: "nacionalidade", label: "Nacionalidade", min: 2, limit: 80, required: true, placeholder: "Ex.: brasileira", autocomplete: "off" },
   { key: "cidade_nascimento", label: "Cidade de nascimento", min: 2, limit: 150, required: true, placeholder: "Cidade e UF ou país", autocomplete: "off" },
@@ -17,16 +21,27 @@ export const fields = [
 export type Field = (typeof fields)[number]["key"];
 export type ClientInput = Record<Field, string>;
 export type FieldErrors = Partial<Record<Field, string>>;
-export type ClientRow = Pick<ClientInput, "nome"> & { id: string; criado_em: string; status: Status };
-export type Client = ClientRow & Omit<ClientInput, "nome" | "nome_social"> & { nome_social: string | null; versao: number };
+export type ClientRow = Pick<ClientInput, "nome"> & {
+  id: string; criado_em: string; status: Status; tipo_caso: CaseType | null; arquivado_em: string | null; tem_foto: boolean;
+};
+export type Client = ClientRow & Omit<ClientInput, "nome" | "nome_social" | "rg" | "cpf" | "tipo_caso"> & {
+  nome_social: string | null; rg: string | null; cpf: string | null; versao: number; foto_path: string | null;
+};
 export type Lawyer = { nome: string; oab_numero: string; oab_uf: string; permissao: "consulta" | "gestao" };
 export type Note = { id: string; texto: string; advogado_nome: string; criado_em: string };
-export type History = { id: string; acao: "cadastro" | "atualizacao" | "observacao"; advogado_nome: string | null; criado_em: string; detalhes: { campos?: string[]; status_anterior?: Status; status_novo?: Status } };
+export type History = {
+  id: string; acao: string; advogado_nome: string | null; criado_em: string;
+  detalhes: { campos?: string[]; status_anterior?: Status; status_novo?: Status };
+};
 
 export const ufs = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
 
 export function isStatus(value: unknown): value is Status {
   return statusOptions.some((status) => status === value);
+}
+
+export function isCaseType(value: unknown): value is CaseType {
+  return caseOptions.some((option) => option === value);
 }
 
 export function isUuid(value: unknown): value is string {
@@ -68,7 +83,11 @@ export function validateClient(input: Record<string, unknown>, partial = false) 
       continue;
     }
     const value = raw.trim();
-    if (required && !value) errors[key] = "Preencha este campo.";
+    if (!required && !value) continue;
+    if (key === "tipo_caso") {
+      if (!isCaseType(value)) errors[key] = "Selecione Administrativo ou Judicial.";
+      else data[key] = value;
+    } else if (required && !value) errors[key] = "Preencha este campo.";
     else if ([...value].length < min) errors[key] = `Informe pelo menos ${min} caracteres.`;
     else if (value.length > limit) errors[key] = `Use até ${limit} caracteres.`;
     else if (value.includes("\0") || /\p{Cs}/u.test(value)) errors[key] = "Remova caracteres inválidos.";

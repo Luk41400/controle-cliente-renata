@@ -4,15 +4,18 @@ Portal de atendimento jurídico em um único domínio. A página `/` recebe os c
 
 ## Funcionalidades
 
-- Cadastro público com os nove campos solicitados, CPF validado no navegador, no servidor e no PostgreSQL, e confirmação após a gravação. Reenvios com o mesmo identificador e conteúdo são idempotentes.
+- Cadastro público com documentos opcionais, tipo de caso Administrativo ou Judicial obrigatório, CPF validado quando preenchido e confirmação após a gravação. Reenvios com o mesmo identificador e conteúdo são idempotentes.
 - Login por OAB, UF e senha com Supabase Auth. A associação com a conta de autenticação é consultada pelo servidor. As operações administrativas usam a sessão do advogado e respeitam RLS.
 - Indicadores do banco, busca parcial por nome, filtros por status e período, ordenação e páginas de 12 registros.
 - Painel lateral com todos os dados, edição com controle de versão, status, observações com autoria e histórico. As alterações e a auditoria são gravadas na mesma transação.
+- Fotografias privadas com pré-visualização, recorte e processamento sem EXIF, além de arquivamento, restauração e exclusão condicionada à liberação individual de retenção.
 - Interface em português, com layout para computador e celular, foco visível e navegação por teclado.
 
 ## Executar localmente
 
 Requisitos de desenvolvimento: Node.js 24, npm e um Supabase de teste configurado conforme o [guia de implantação](docs/implantacao.md).
+
+Para atualizar uma instalação existente, siga o [roteiro da atualização de clientes](docs/atualizacao-clientes.md). Ele identifica a migração incremental, a configuração do Storage e a rotina de recuperação de arquivos. A publicação desta atualização aguarda a confirmação da aplicação da migração em produção.
 
 ```powershell
 npm ci
@@ -46,5 +49,5 @@ npm run test:browser
 | `supabase` | Inspeção, relatório, migração incremental e estrutura exclusiva de testes |
 | `tests` | Testes de validação, banco e navegador |
 
-O projeto usa Next.js com App Router, TypeScript, Tailwind CSS, Supabase PostgreSQL e Supabase Auth. O [guia de implantação](docs/implantacao.md) detalha a configuração, o primeiro advogado, a publicação pelo GitHub e pela Vercel, a homologação e os backups.
+O projeto usa Next.js com App Router, TypeScript, Tailwind CSS, Supabase PostgreSQL, Supabase Auth e Supabase Storage. O nome exibido é Advocacia Rodrigues e Alves. O [guia de implantação](docs/implantacao.md) detalha a configuração, o primeiro advogado, a publicação pelo GitHub e pela Vercel, a homologação e os backups.
 

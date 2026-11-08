@@ -2,6 +2,8 @@
 
 ## 1. Conferir o Supabase existente
 
+Se a segurança inicial já está instalada, siga o [roteiro da atualização de clientes, fotografias e arquivamento](atualizacao-clientes.md) para a migração incremental desta versão.
+
 Use o projeto de referência `srvzdpkaqnxvydxinfco`, identificado no relatório como `Aula03/08/2026`. O nome de exibição pode ser alterado para `controle-cliente-renata` nas configurações do projeto. A aplicação usa a URL do projeto e a referência continua a mesma.
 
 1. Compare o [relatório de metadados](../supabase/resultado-inspecao.md) com uma execução atual de [inspecionar.sql](../supabase/inspecionar.sql) no SQL Editor. A inspeção consulta apenas os catálogos.
@@ -25,6 +27,7 @@ Localmente, copie `.env.example` para `.env.local` e preencha o arquivo. Na Verc
 | `SUPABASE_PUBLISHABLE_KEY` | Chave publicável do mesmo projeto, obtida em **Settings → API Keys**. Nesta aplicação fica configurada no servidor. |
 | `SUPABASE_SECRET_KEY` | Chave secreta do mesmo projeto, usada pelo servidor para resolver o login e gravar cadastros públicos. Configure como segredo na Vercel. |
 | `APP_HASH_SECRET` | Valor aleatório exclusivo por ambiente, com pelo menos 32 caracteres. Use 32 bytes aleatórios codificados em hexadecimal. Configure como segredo na Vercel. |
+| `CRON_SECRET` | Segredo aleatório exclusivo com pelo menos 32 caracteres para a rotina protegida de limpeza de fotografias. |
 
 Para gerar o segredo de hash na sua máquina, execute o comando abaixo e use o resultado apenas no arquivo local ignorado pelo Git ou no cofre de variáveis da Vercel.
 
@@ -36,12 +39,9 @@ Mantenha ambientes de preview e desenvolvimento isolados do banco de produção.
 
 ## 3. Cadastrar o primeiro advogado
 
-1. No Supabase, confirme que o provedor de e-mail e senha está habilitado. Em **Authentication**, desabilite novos cadastros públicos e login anônimo para este projeto. Se houver outras aplicações no projeto, valide o impacto dessa configuração antes da mudança.
-2. Como administrador do projeto, crie a conta em **Authentication → Users**. Use um e-mail profissional que o advogado controle e defina uma senha exclusiva e forte no fluxo administrativo do Supabase. Trate a entrega inicial ou redefinição por canal seguro do escritório. Confirme o usuário conforme o procedimento do escritório.
-3. Copie o UUID dessa conta. Em **Table Editor → adv_advogados**, insira uma linha e deixe o próprio banco gerar `id` e `criado_em`.
-4. Preencha `auth_user_id` com o UUID de **Authentication → Users**, `email_login` com o mesmo e-mail, `nome`, `oab_numero` conforme a inscrição que será digitada e `oab_uf` com a sigla em maiúsculas. Preserve zeros à esquerda e sufixos. O login compara o número como foi cadastrado, ignorando espaços nas extremidades da entrada.
-5. Escolha `permissao = gestao` para editar, alterar status e adicionar observações, ou `permissao = consulta` para somente leitura. Marque `ativo = true` quando autorizar a pessoa.
-6. Abra `/admin` e entre com OAB, UF e senha. Se mudar o e-mail no Supabase Auth, atualize `email_login` para manter a associação. Para suspender acesso, marque `ativo = false` e revogue as sessões da conta pelo procedimento do escritório. A aplicação verifica a sessão e o perfil no banco a cada operação.
+Para a configuração atual, com **somente um advogado autorizado**, siga o [procedimento de primeiro acesso](primeiro-acesso.md) e execute o [modelo SQL de autorização](../supabase/primeiro-advogado.sql) no painel privado do Supabase. Ele vincula o UUID do Auth, preserva o ID de um perfil existente e desativa os demais perfis em uma transação. A senha é definida no fluxo privado de Authentication.
+
+O login utiliza a OAB exatamente como cadastrada, inclusive zeros e sufixos, a UF e a senha do Auth. Se mudar o e-mail no Supabase Auth, atualize `email_login` para manter a associação. A aplicação verifica a sessão e o perfil ativo no banco em cada operação.
 
 A autenticação usa o ciclo de renovação do Supabase Auth e aplica um limite absoluto de sete dias à sessão. Cookies administrativos são HttpOnly e, em HTTPS, Secure. O cadastro tem limite por IP e o login tem limites por IP, por conta e por combinação dos dois. O servidor usa o IP informado pela infraestrutura da Vercel e guarda identificadores HMAC para os limites. [Sessões do Supabase](https://supabase.com/docs/guides/auth/sessions) · [Cabeçalhos da Vercel](https://vercel.com/docs/headers/request-headers)
 
@@ -80,7 +80,7 @@ Use apenas dados sintéticos e contas de teste em um ambiente isolado.
 ## 6. Privacidade, retenção e backups
 
 - Revise a [minuta editável](../src/app/privacidade/page.tsx) e preencha a identidade e o contato do controlador, as bases legais, os operadores, os prazos e as informações sobre compartilhamento ou transferência antes de coletar dados de clientes reais.
-- Defina com o escritório prazos por categoria de dado e regras de preservação para casos sujeitos a obrigações legais ou profissionais. Verifique identidade, autorização e vínculos antes de uma exclusão. A interface oferece consulta e atualização. A exclusão autorizada deve seguir procedimento operacional do escritório, com conferência dos efeitos sobre observações, auditoria e backups.
+- Defina com o escritório prazos por categoria de dado e regras de preservação para casos sujeitos a obrigações legais ou profissionais. Verifique identidade, autorização e vínculos antes de uma exclusão. O painel permite arquivar e restaurar. A exclusão definitiva depende da liberação individual no Supabase, conforme o [roteiro da atualização](atualizacao-clientes.md), com conferência dos efeitos sobre observações, auditoria, fotografias e backups.
 - Em **Database → Backups**, confira a cobertura e a retenção do plano. Estabeleça periodicidade conforme a perda aceitável de dados e use PITR quando necessário e disponível. Se fizer cópias lógicas, use um destino criptografado, controle de acesso e prazo de expiração. Documente a recuperação de Auth e dos perfis, e teste restaurações isoladas periodicamente.
 - Restrinja acessos ao Supabase, à Vercel e ao GitHub. Evite ferramentas que capturem corpo de requisição, cookies, formulários ou sessões gravadas. Faça a revisão de segurança e privacidade do escritório antes de aceitar atendimentos reais.
 

@@ -22,14 +22,13 @@ export class RequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export async function body(request: Request): Promise<Record<string, unknown>> {
+export async function body(request: Request, limit = 100_000): Promise<Record<string, unknown>> {
   if (request.headers.get("origin") !== appOrigin() || request.headers.get("sec-fetch-site") === "cross-site") {
     throw new RequestError("Origem da solicitação inválida.", 403);
   }
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") {
     throw new RequestError("Formato de solicitação inválido.", 415);
   }
-  const limit = 100_000;
   if (Number(request.headers.get("content-length")) > limit) throw new RequestError("Solicitação muito longa.", 413);
   const reader = request.body?.getReader();
   if (!reader) throw new RequestError("Solicitação inválida.", 400);

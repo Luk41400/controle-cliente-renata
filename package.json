@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Portal de cadastro e gestão de atendimentos jurídicos",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "typecheck": "next typegen && tsc --noEmit",
@@ -21,7 +23,8 @@
     "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",

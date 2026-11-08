@@ -1,6 +1,7 @@
 import type { FieldErrors } from "./clientes";
 
 export const clientPath = "/api/admin/clientes";
+export type ClientActionResult = { message: string; pending?: boolean; operation?: string; id?: string };
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly fields: FieldErrors = {}) { super(message); }

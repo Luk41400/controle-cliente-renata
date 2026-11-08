@@ -17,13 +17,19 @@ test("cadastro móvel, navegação por teclado e validação real do endpoint", 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Cadastro de Clientes" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-  await expect(page.locator("form input, form textarea")).toHaveCount(9);
+  await expect(page.getByRole("link", { name: "Advocacia Rodrigues e Alves, página inicial" })).toBeVisible();
+  await expect(page.locator("form input:not([type=radio]), form textarea")).toHaveCount(9);
+  await expect(page.getByRole("radio", { name: "Administrativo" })).not.toBeChecked();
+  await expect(page.getByRole("radio", { name: "Judicial" })).not.toBeChecked();
   await page.getByRole("button", { name: "Enviar cadastro" }).click();
   await expect(page.getByLabel("Nome completo")).toBeFocused();
   await expect(page.getByLabel("Nome completo")).toHaveAttribute("aria-invalid", "true");
   for (const [label, value] of Object.entries(fields)) {
-    await page.getByRole("textbox", { name: label, exact: label !== "Nome Social" }).fill(value);
+    await page.getByRole("textbox", { name: label, exact: !["Nome Social", "RG", "CPF"].includes(label) }).fill(value);
   }
+  await page.getByRole("button", { name: "Enviar cadastro" }).click();
+  await expect(page.getByText("Selecione Administrativo ou Judicial.")).toBeVisible();
+  await page.getByRole("radio", { name: "Administrativo" }).check();
   await expect(page.getByLabel("CPF")).toHaveValue("529.982.247-25");
   await page.getByRole("button", { name: "Enviar cadastro" }).click();
   await expect(page.locator("form").getByRole("alert")).toContainText("O serviço está indisponível");
@@ -50,6 +56,10 @@ test("área restrita apresenta login e rejeita leitura sem sessão", async ({ pa
   });
   expect(admin.status()).toBe(401);
   expect(admin.headers()["cache-control"]).toContain("no-store");
+  const photo = await request.post("/api/admin/foto", {
+    headers: { Origin: baseURL }, data: { action: "ver", id: "10000000-0000-4000-8000-000000000001" },
+  });
+  expect(photo.status()).toBe(401);
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Área do advogado" })).toBeVisible();
   await expect(page.getByLabel("Número da OAB")).toBeVisible();

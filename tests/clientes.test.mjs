@@ -11,18 +11,27 @@ test("CPF com máscara e dígitos verificadores", () => {
   assert.equal(validCpf("11111111111"), false);
 });
 
-test("os nove campos são validados e os formatos de RG são preservados", () => {
-  assert.equal(fields.length, 9);
+test("validação preserva os formatos de RG e exige classificação", () => {
+  assert.equal(fields.length, 10);
   const empty = validateClient(emptyClient());
-  assert.equal(Object.keys(empty.errors).length, 8);
+  assert.equal(Object.keys(empty.errors).length, 7);
   assert.equal(maskRg("12345678x"), "12.345.678-X");
   assert.equal(maskRg("MG-123456"), "MG-123456");
-  const data = { ...Object.fromEntries(fields.map(({ key }) => [key, "Exemplo sintético"])), cpf: "529.982.247-25", nome_social: "" };
+  const data = { ...Object.fromEntries(fields.map(({ key }) => [key, "Exemplo sintético"])), cpf: "529.982.247-25", nome_social: "", tipo_caso: "administrativo" };
   assert.equal(validateClient(data).data.cpf, "52998224725");
   assert.equal(validateClient(data).valid, true);
   assert.equal(validateClient({ ...data, caso_juridico: "x".repeat(12001) }).valid, false);
   assert.equal(validateClient({ ...data, cpf: "abc52998224725" }).valid, false);
   assert.equal(validateClient({ endereco: "Rua nova" }, true).valid, true);
   assert.ok(validateClient({ endereco: "Rua" }, true).errors.endereco);
+  for (const rg of ["", "RG-TESTE"]) {
+    for (const cpf of ["", "529.982.247-25"]) {
+      for (const tipo_caso of ["administrativo", "judicial"]) assert.equal(validateClient({ ...data, rg, cpf, tipo_caso }).valid, true);
+    }
+  }
+  assert.ok(validateClient({ ...data, tipo_caso: "" }).errors.tipo_caso);
+  assert.ok(validateClient({ ...data, tipo_caso: "outro" }).errors.tipo_caso);
+  assert.ok(validateClient({ ...data, rg: "X" }).errors.rg);
+  assert.equal(validateClient({ rg: null, cpf: null }, true).valid, true);
 });
 

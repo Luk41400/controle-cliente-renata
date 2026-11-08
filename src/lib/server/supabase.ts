@@ -15,9 +15,12 @@ function settings(key: "SUPABASE_PUBLISHABLE_KEY" | "SUPABASE_SECRET_KEY") {
   return { url, apiKey };
 }
 
-export function systemClient() {
+export function systemClient(timeout?: number) {
   const { url, apiKey } = settings("SUPABASE_SECRET_KEY");
-  return createClient(url, apiKey, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
+  return createClient(url, apiKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    global: timeout ? { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.any([AbortSignal.timeout(timeout), ...(init?.signal ? [init.signal] : [])]) }) } : undefined,
+  });
 }
 
 export async function sessionClient() {
