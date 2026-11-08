@@ -43,9 +43,21 @@ test("andamento e fotografia inicial em PostgreSQL descartável", async (t) => {
     await asRole(db,"authenticated",viewer,viewerSession,async()=>assert.equal((await db.query("update adv_clientes set andamento_caso='Não permitido' where id=$1 returning id",[legacy])).rows.length,0));
     await asRole(db,"anon",undefined,undefined,async()=>{await assert.rejects(db.query("select andamento_caso from adv_clientes"),/permission denied/);});
   });
+  await t.test("conta sem perfil, inativa ou sem sessão não lê nem edita andamento",async()=>{
+    const unknown=randomUUID(),unknownSession=randomUUID();
+    await db.query("insert into auth.users(id) values($1)",[unknown]);await db.query("insert into auth.sessions(id,user_id) values($1,$2)",[unknownSession,unknown]);
+    async function denied(subject,sessionId){await asRole(db,"authenticated",subject,sessionId,async()=>{
+      assert.equal((await db.query("select andamento_caso from adv_clientes where id=$1",[legacy])).rows.length,0);
+      assert.equal((await db.query("update adv_clientes set andamento_caso='Não autorizado' where id=$1 returning id",[legacy])).rows.length,0);
+    });}
+    await denied(unknown,unknownSession);
+    await db.query("update adv_advogados set ativo=false where id=$1",[lawyer]);await denied(user,session);await db.query("update adv_advogados set ativo=true where id=$1",[lawyer]);
+    await denied(user,randomUUID());
+  });
   await t.test("cadastro sem foto salva andamento e permite vazio",async()=>{
-    for(const andamento of [null,"",data.andamento_caso])await system(async()=>{
-      const envio=randomUUID();await db.query("select adv_registrar_cliente($1,$2,$3)",[{...data,andamento_caso:andamento},envio,"a".repeat(64)]);
+    for(const andamento of [undefined,null,"",data.andamento_caso])await system(async()=>{
+      const payload={...data,andamento_caso:andamento};if(andamento===undefined)delete payload.andamento_caso;
+      const envio=randomUUID();await db.query("select adv_registrar_cliente($1,$2,$3)",[payload,envio,"a".repeat(64)]);
       const row=(await db.query("select andamento_caso,foto_path from adv_clientes where envio_id=$1",[envio])).rows[0];assert.equal(row.andamento_caso,andamento||null);assert.equal(row.foto_path,null);
     });
   });
@@ -83,8 +95,19 @@ test("andamento e fotografia inicial em PostgreSQL descartável", async (t) => {
       await assert.rejects(db.query("select * from renata_privado.cadastro_fotos"),/permission denied/);
       await assert.rejects(db.query("select adv_cadastro_foto_preparar($1,$2)",[randomUUID(),"e".repeat(64)]),/permission denied/);
       await assert.rejects(db.query("select adv_registrar_cliente_com_foto($1,$2,$3)",[data,randomUUID(),"e".repeat(64)]),/permission denied/);
+      await assert.rejects(db.query("select adv_cadastro_fotos_limpar()"),/permission denied/);
     });
     assert.equal((await db.query("select public from storage.buckets where id='fotos-clientes'")).rows[0].public,false);
+  });
+  await t.test("limpeza de reservas preserva recuperação pendente e nunca apaga clientes",async()=>{
+    await system(async()=>{
+      const envio=randomUUID();const op=(await db.query("select adv_cadastro_foto_preparar($1,$2) as op",[envio,"f".repeat(64)])).rows[0].op;
+      await db.query("update renata_privado.cadastro_fotos set expira_em=now()-interval '2 days' where envio_id=$1",[envio]);
+      await db.query("select adv_cadastro_fotos_limpar()");assert.equal((await db.query("select count(*)::int as n from renata_privado.cadastro_fotos where envio_id=$1",[envio])).rows[0].n,1);
+      await db.query("update renata_privado.storage_limpezas set disponivel_em=now()-interval '1 minute' where foto_path=$1",[op.path]);const task=(await db.query("select * from adv_storage_recolher(null)")).rows.find(r=>r.foto_path===op.path);
+      await db.query("select adv_storage_concluir($1,$2)",[[task.id],[task.token]]);
+      const before=(await db.query("select count(*)::int as n from adv_clientes")).rows[0].n;await db.query("select adv_cadastro_fotos_limpar()");assert.equal((await db.query("select count(*)::int as n from adv_clientes")).rows[0].n,before);assert.equal((await db.query("select count(*)::int as n from renata_privado.cadastro_fotos where envio_id=$1",[envio])).rows[0].n,0);
+    });
   });
   await t.test("exclusão com revisão individual remove também metadados da foto inicial",async()=>{
     const operation=randomUUID();
