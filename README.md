@@ -9,6 +9,7 @@ Portal de atendimento jurídico em um único domínio. A página `/` recebe os c
 - Indicadores do banco, busca parcial por nome, filtros por status e período, ordenação e páginas de 12 registros.
 - Painel lateral com todos os dados, edição com controle de versão, status, observações com autoria e histórico. As alterações e a auditoria são gravadas na mesma transação.
 - Fotografias privadas com pré-visualização, recorte e processamento sem EXIF, além de arquivamento, restauração e exclusão condicionada à liberação individual de retenção.
+- Fotografia opcional no cadastro inicial, prévia contínua com controles circulares e andamento livre, persistente e editável. Veja o [roteiro de foto e andamento](docs/foto-andamento.md) antes de publicar esta atualização.
 - Interface em português, com layout para computador e celular, foco visível e navegação por teclado.
 
 ## Executar localmente

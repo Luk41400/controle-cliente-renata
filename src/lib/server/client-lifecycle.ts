@@ -15,7 +15,7 @@ export function checkDatabase(error: { code?: string } | null) {
 // A tarefa é registrada antes de cada upload. Falhas são recuperadas pelo cron,
 // e a remoção do cadastro aguarda a confirmação da API de Storage.
 export async function cleanupPhotos(clientId: string | null = null) {
-  const system = systemClient(8_000);
+  const system = systemClient(5_000);
   const claimed = await system.rpc("adv_storage_recolher", { p_cliente: clientId });
   if (claimed.error) throw claimed.error;
   const tasks = (claimed.data ?? []) as { id: string; foto_path: string; token: string }[];
@@ -32,6 +32,8 @@ export async function cleanupPhotos(clientId: string | null = null) {
   if (finalized.error) throw finalized.error;
   const pending = await system.rpc("adv_storage_pendentes", { p_cliente: clientId });
   if (pending.error) throw pending.error;
+  const reservations = await system.rpc("adv_cadastro_fotos_limpar");
+  if (reservations.error) throw reservations.error;
   return { files: tasks.length, deletions: finalized.data as number, pending: Number(pending.data) };
 }
 

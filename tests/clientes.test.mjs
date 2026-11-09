@@ -12,7 +12,7 @@ test("CPF com máscara e dígitos verificadores", () => {
 });
 
 test("validação preserva os formatos de RG e exige classificação", () => {
-  assert.equal(fields.length, 10);
+  assert.equal(fields.length, 11);
   const empty = validateClient(emptyClient());
   assert.equal(Object.keys(empty.errors).length, 7);
   assert.equal(maskRg("12345678x"), "12.345.678-X");
@@ -33,5 +33,16 @@ test("validação preserva os formatos de RG e exige classificação", () => {
   assert.ok(validateClient({ ...data, tipo_caso: "outro" }).errors.tipo_caso);
   assert.ok(validateClient({ ...data, rg: "X" }).errors.rg);
   assert.equal(validateClient({ rg: null, cpf: null }, true).valid, true);
+});
+
+test("andamento é opcional, preserva parágrafos e não tem limite de caracteres", () => {
+  const text = "  Primeiro parágrafo.\n\n" + "Atualização extensa. ".repeat(20000) + "\nÚltimo parágrafo.\n";
+  for (const value of ["", "Curto", text]) {
+    const result = validateClient({ andamento_caso: value }, true);
+    assert.equal(result.valid, true);
+    assert.equal(result.data.andamento_caso, value);
+  }
+  assert.equal(validateClient({ andamento_caso: null }, true).valid, true);
+  assert.ok(validateClient({ andamento_caso: "Inválido\0" }, true).errors.andamento_caso);
 });
 
