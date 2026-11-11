@@ -2,6 +2,12 @@
 
 Portal de atendimento jurídico em um único domínio. A página `/` recebe os cadastros, `/admin` apresenta o login e o painel privado, e `/privacidade` apresenta a minuta da política do escritório.
 
+**[Acessar o sistema publicado](https://controle-cliente-renata.vercel.app)** · [Acesso pelo GitHub Pages](https://luk41400.github.io/controle-cliente-renata/)
+
+O GitHub Pages redireciona automaticamente para a aplicação completa na Vercel, inclusive sem JavaScript. Ele publica somente a branch `gh-pages`, gerada da pasta `github-pages`, sem APIs, banco de dados ou credenciais. A configuração `github-pages/vercel.json` impede deploys dessa branch estática na Vercel; a aplicação Next.js continua sendo publicada normalmente pela `main`.
+
+Para atualizar apenas essa página estática após salvar suas alterações na `main`, use `git subtree push --prefix=github-pages origin gh-pages`. A origem configurada em **Settings → Pages** é `gh-pages` / `(root)`.
+
 ## Funcionalidades
 
 - Cadastro público com documentos opcionais, tipo de caso Administrativo ou Judicial obrigatório, CPF validado quando preenchido e confirmação após a gravação. Reenvios com o mesmo identificador e conteúdo são idempotentes.
