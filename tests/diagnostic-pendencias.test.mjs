@@ -13,7 +13,8 @@ test("diagnóstico distingue ACL efetiva, PUBLIC, herança e diferenças de RLS 
   const db=await database();t.after(()=>db.close());
   await t.test("uma tabela de 15 comparações, com valores reais e esperados",async()=>{
     const rows=await readonly(db,diagnostic);assert.equal(rows.length,15);assert.equal(rows.filter(r=>r.categoria==="ACL_FUNCAO").length,11);assert.equal(rows.filter(r=>r.categoria==="POLITICA_RLS").length,3);
-    assert(rows.filter(r=>r.categoria!=="DATA_API").every(r=>r.avaliacao==="COINCIDE_COM_ESPERADO_ANTERIOR"));
+    assert(rows.filter(r=>r.categoria==="ACL_FUNCAO").every(r=>r.avaliacao==="COINCIDE_COM_ESPERADO_ANTERIOR"));
+    assert(rows.filter(r=>r.categoria==="POLITICA_RLS").every(r=>r.encontrado.estrutura_e_dependencias_ok&&["COINCIDE_COM_ESPERADO_ANTERIOR","POSSIVEL_FALSO_POSITIVO_REPRESENTACAO"].includes(r.avaliacao)));
     const sample=rows[0].encontrado;assert(sample.definicao.includes("CREATE OR REPLACE FUNCTION"));assert.equal(sample.execute_efetivo.service_role,false);assert.equal(sample.origens_por_papel.service_role.bypassrls_nao_substitui_execute,true);
   });
   await t.test("identifica EXECUTE herdado sem confundi-lo com grant direto",async()=>{

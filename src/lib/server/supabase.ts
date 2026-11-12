@@ -1,11 +1,16 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import type { Lawyer } from "@/lib/clientes";
 import { appOrigin, digest, RequestError } from "./http";
+import { isSessionCookie, rawSessionCookies, selectedSessionCookies, SESSION_COOKIE, SESSION_MAX_AGE, SESSION_PATH } from "../auth-cookies";
+import { stageCookie } from "./request-context";
 
-const sessionCookie = "renata-sessao";
+export async function clearSessionCookies() {
+  const names = new Set([SESSION_COOKIE, ...rawSessionCookies((await headers()).get('cookie') || '').map(c => c.name)]);
+  for (const name of names) for (const path of ['/', SESSION_PATH]) stageCookie({name, value: '', options: {path, maxAge: 0, httpOnly: true, secure: Boolean(process.env.VERCEL) || appOrigin().startsWith('https:'), sameSite: 'lax'}});
+}
 
 function settings(key: "SUPABASE_PUBLISHABLE_KEY" | "SUPABASE_SECRET_KEY") {
   const url = process.env.SUPABASE_URL;
@@ -23,16 +28,23 @@ export function systemClient(timeout?: number) {
   });
 }
 
-export async function sessionClient() {
+export async function sessionClient(freshLogin = false) {
   const { url, apiKey } = settings("SUPABASE_PUBLISHABLE_KEY");
-  const jar = await cookies();
+  const header = (await headers()).get('cookie') || '';
+  const secure = Boolean(process.env.VERCEL) || appOrigin().startsWith('https:');
   return createServerClient(url, apiKey, {
-    cookieOptions: { name: sessionCookie, httpOnly: true, secure: appOrigin().startsWith("https:"), sameSite: "lax", path: "/api/admin" },
+    cookieOptions: { name: SESSION_COOKIE, httpOnly: true, secure, sameSite: "lax", path: SESSION_PATH, maxAge: SESSION_MAX_AGE },
     cookies: {
       encode: "tokens-only",
-      getAll: () => jar.getAll(),
+      getAll: () => freshLogin ? [] : selectedSessionCookies(header),
       setAll: (values) => {
-        for (const { name, value, options } of values) jar.set(name, value, options);
+        const active = new Set(values.filter(v => v.value && v.options.maxAge !== 0).map(v => v.name));
+        for (const name of new Set(rawSessionCookies(header).map(c => c.name))) {
+          for (const path of ['/', SESSION_PATH]) if (path === '/' || !active.has(name)) stageCookie({name, value: '', options: {path, maxAge: 0, httpOnly: true, secure, sameSite: 'lax'}});
+        }
+        for (const { name, value, options } of values) if (isSessionCookie(name)) {
+          stageCookie({name, value, options: {...options, domain: undefined, path: SESSION_PATH, httpOnly: true, secure, sameSite: 'lax', maxAge: value ? SESSION_MAX_AGE : 0}});
+        }
       },
     },
   });
@@ -45,24 +57,31 @@ export async function lawyerProfile(client: SessionClient, userId: string) {
     .select("id,nome,oab_numero,oab_uf,permissao")
     .eq("auth_user_id", userId).eq("ativo", true).maybeSingle<Lawyer & { id: string }>();
   if (error) throw error;
-  if (!data) return null;
+  if (!data || !['gestao', 'consulta'].includes(data.permissao)) return null;
   const { id, ...lawyer } = data;
   return { lawyer, lawyerId: id };
 }
 
 export async function requireLawyer() {
-  const jar = await cookies();
-  if (!jar.getAll().some(({ name }) => name === sessionCookie || name.startsWith(`${sessionCookie}.`))) {
-    throw new RequestError("Entre para acessar a área restrita.", 401);
+  if (!rawSessionCookies((await headers()).get('cookie') || '').length) {
+    throw new RequestError("Entre para acessar a área restrita.", 401, 'AUTH_REQUIRED');
   }
   const client = await sessionClient();
-  const { data, error } = await client.auth.getUser();
-  if (error && error.status && error.status >= 500) throw error;
-  if (!data.user) throw new RequestError("Entre para acessar a área restrita.", 401);
-  const profile = await lawyerProfile(client, data.user.id);
+  let result = await client.auth.getUser();
+  if (result.error && result.error.status === 401 && result.error.name !== 'AuthSessionMissingError') {
+    const refreshed = await client.auth.refreshSession();
+    if (refreshed.error && (!refreshed.error.status || refreshed.error.status >= 500)) throw refreshed.error;
+    if (!refreshed.error) result = await client.auth.getUser();
+  }
+  if (result.error && (!result.error.status || result.error.status >= 500)) throw result.error;
+  if (!result.data.user) {
+    await clearSessionCookies();
+    throw new RequestError("Sua sessão expirou. Entre novamente para continuar.", 401, 'SESSION_EXPIRED');
+  }
+  const profile = await lawyerProfile(client, result.data.user.id);
   if (!profile) {
-    await client.auth.signOut({ scope: "local" });
-    throw new RequestError("Entre para acessar a área restrita.", 401);
+    await clearSessionCookies();
+    throw new RequestError("Sua sessão expirou ou seu acesso não está autorizado. Entre novamente.", 401, 'SESSION_NOT_AUTHORIZED');
   }
   return { client, ...profile };
 }

@@ -19,7 +19,7 @@ const cards = [
   { key: "concluidos", label: "Casos concluídos", icon: CircleCheck },
 ] as const;
 
-export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: () => void }) {
+export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: (expired?: boolean) => void }) {
   const [filters, setFilters] = useState(initialFilters);
   const [draft, setDraft] = useState(initialFilters);
   const [revision, setRevision] = useState(0);
@@ -86,7 +86,7 @@ export function Dashboard({ lawyer, onExit }: { lawyer: Lawyer; onExit: () => vo
     setExitError("");
     try {
       await api("/api/admin/sessao", { action: "sair" });
-      onExit();
+      onExit(false);
     } catch (error) {
       setExitError(errorMessage(error));
       setSigningOut(false);

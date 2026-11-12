@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import { isUuid, validateClient } from "@/lib/clientes";
 import { normalizePhoto } from "@/lib/image-processing";
 import { PHOTO_BUCKET, photoPath } from "@/lib/photo-rules";
-import { body, digest, failure, json, problem, sourceIp } from "@/lib/server/http";
+import { body, digest, failure, json, problem, sourceIp, route } from "@/lib/server/http";
 import { allowAttempt, systemClient } from "@/lib/server/supabase";
 
 export const maxDuration = 60;
 
-export async function POST(request: Request) {
+async function register(request: Request) {
   try {
     // Limite técnico do corpo HTTP; o campo de andamento não tem limite próprio.
     const input = await body(request, 3_500_000);
@@ -49,4 +49,6 @@ export async function POST(request: Request) {
     return failure(error);
   }
 }
+
+export const POST = route(register);
 

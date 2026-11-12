@@ -1,5 +1,5 @@
 import { fields, isStatus, isUuid, validateClient } from "@/lib/clientes";
-import { body, failure, json, problem, RequestError } from "@/lib/server/http";
+import { body, failure, json, problem, RequestError, route } from "@/lib/server/http";
 import { requireLawyer } from "@/lib/server/supabase";
 import { checkDatabase, tryCleanupPhotos } from "@/lib/server/client-lifecycle";
 
@@ -101,7 +101,7 @@ async function deletionState(db: Database, id: string, operation: string) {
   }, completed ? 200 : 202);
 }
 
-export async function POST(request: Request) {
+async function postClients(request: Request) {
   try {
     const { client, lawyer, lawyerId } = await requireLawyer();
     const input = await body(request, 3_500_000);
@@ -151,4 +151,6 @@ export async function POST(request: Request) {
     return failure(error);
   }
 }
+
+export const POST = route(postClients);
 

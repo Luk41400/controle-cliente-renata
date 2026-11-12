@@ -1,11 +1,11 @@
 import "server-only";
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
+import { originFailure, originPolicy } from "../origin-policy";
+import { diagnostic, requestContext } from "./request-context";
 
 export function appOrigin() {
-  const url = new URL(process.env.APP_ORIGIN || (process.env.VERCEL ? "" : "http://localhost:3000"));
-  if (process.env.VERCEL && url.protocol !== "https:") throw new Error("APP_ORIGIN exige HTTPS.");
-  return url.origin;
+  return originPolicy().primary;
 }
 
 export function json(body: unknown, status = 200, headers?: HeadersInit) {
@@ -14,18 +14,34 @@ export function json(body: unknown, status = 200, headers?: HeadersInit) {
   return response;
 }
 
-export function problem(message: string, status: number) {
-  return json({ message }, status);
+export function problem(message: string, status: number, code?: string) {
+  if (!code && status === 403) { code = 'ACCESS_DENIED'; diagnostic(code, status); }
+  return json({ message, ...(code ? { code } : {}) }, status);
 }
 
 export class RequestError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  constructor(message: string, readonly status: number, readonly code = 'REQUEST_REJECTED') { super(message); }
+}
+
+export function validateOrigin(request: Request) {
+  const reason = originFailure(request, originPolicy());
+  if (reason) {
+    diagnostic('ORIGIN_' + reason.toUpperCase(), 403);
+    throw new RequestError('Origem da solicitação inválida. Abra o endereço oficial do sistema e tente novamente.', 403, 'ORIGIN_REJECTED');
+  }
+}
+
+export function route(handler: (request: Request) => Promise<Response>) {
+  return (request: Request) => requestContext(request, async () => {
+    try {
+      if (!['GET', 'HEAD'].includes(request.method)) validateOrigin(request);
+      return await handler(request);
+    } catch (error) { return failure(error); }
+  });
 }
 
 export async function body(request: Request, limit = 100_000): Promise<Record<string, unknown>> {
-  if (request.headers.get("origin") !== appOrigin() || request.headers.get("sec-fetch-site") === "cross-site") {
-    throw new RequestError("Origem da solicitação inválida.", 403);
-  }
+  validateOrigin(request);
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") {
     throw new RequestError("Formato de solicitação inválido.", 415);
   }
@@ -57,8 +73,12 @@ export async function body(request: Request, limit = 100_000): Promise<Record<st
 }
 
 export function failure(error: unknown) {
-  if (error instanceof RequestError) return problem(error.message, error.status);
-  return problem("O serviço está indisponível no momento. Tente novamente em instantes.", 503);
+  if (error instanceof RequestError) {
+    if (error.code !== 'ORIGIN_REJECTED') diagnostic(error.code, error.status);
+    return problem(error.message, error.status, error.code);
+  }
+  diagnostic('SERVICE_UNAVAILABLE', 503);
+  return problem("O serviço está indisponível no momento. Tente novamente em instantes.", 503, 'SERVICE_UNAVAILABLE');
 }
 
 export function digest(scope: string, value: string) {

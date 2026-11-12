@@ -35,6 +35,8 @@ Abra [http://localhost:3000](http://localhost:3000). Use o endereço exato confi
 
 ## Verificações
 
+O [diagnóstico de origem e sessões](docs/origem-e-sessoes.md) descreve as origens autorizadas, a renovação segura, a compatibilidade de cookies antigos e os testes de regressão. As suítes de integração são executadas sequencialmente porque iniciam instâncias locais da aplicação e bancos descartáveis.
+
 ```powershell
 npm run typecheck
 npm run lint
