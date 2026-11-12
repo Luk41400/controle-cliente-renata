@@ -1,10 +1,11 @@
 import { ufs } from "@/lib/clientes";
-import { body, failure, json, problem, sourceIp } from "@/lib/server/http";
-import { allowAttempt, lawyerProfile, requireLawyer, sessionClient, systemClient } from "@/lib/server/supabase";
+import { body, failure, json, problem, sourceIp, route } from "@/lib/server/http";
+import { allowAttempt, clearSessionCookies, lawyerProfile, requireLawyer, sessionClient, systemClient } from "@/lib/server/supabase";
+import { diagnostic, discardCookies } from "@/lib/server/request-context";
 
-const invalid = () => problem("OAB, UF ou senha inválidos.", 401);
+const invalid = () => { diagnostic('AUTH_INVALID', 401); return problem("OAB, UF ou senha inválidos.", 401, 'AUTH_INVALID'); };
 
-export async function GET() {
+async function getSession() {
   try {
     const { lawyer } = await requireLawyer();
     return json({ lawyer });
@@ -13,13 +14,14 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function postSession(request: Request) {
   try {
     const input = await body(request);
     if (input.action === "sair") {
       const client = await sessionClient();
       const { error } = await client.auth.signOut({ scope: "local" });
-      if (error && error.code !== "session_not_found" && error.name !== "AuthSessionMissingError") throw error;
+      if (error && error.status !== 401 && error.status !== 403 && error.code !== "session_not_found" && error.name !== "AuthSessionMissingError") throw error;
+      await clearSessionCookies();
       return json({ ok: true });
     }
     const number = typeof input.oab === "string" ? input.oab.trim() : "";
@@ -37,10 +39,10 @@ export async function POST(request: Request) {
 
     const system = systemClient();
     const { data: profile, error: lookupError } = await system.from("adv_advogados")
-      .select("auth_user_id,email_login").eq("oab_numero", number).eq("oab_uf", uf).eq("ativo", true).maybeSingle();
+      .select("auth_user_id,email_login").eq("oab_numero", normalized).eq("oab_uf", uf).eq("ativo", true).maybeSingle();
     if (lookupError) throw lookupError;
     if (!profile) return invalid();
-    const client = await sessionClient();
+    const client = await sessionClient(true);
     const { data, error } = await client.auth.signInWithPassword({ email: profile.email_login, password });
     if (error?.status === 429) return json({ message: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429, { "Retry-After": "900" });
     if (error?.status && error.status >= 500) throw error;
@@ -52,10 +54,16 @@ export async function POST(request: Request) {
       authorized = true;
       return json({ lawyer: authorizedProfile.lawyer });
     } finally {
-      if (!authorized) await client.auth.signOut({ scope: "local" });
+      if (!authorized) {
+        try { await client.auth.signOut({ scope: "local" }); }
+        finally { discardCookies(); }
+      }
     }
   } catch (error) {
     return failure(error);
   }
 }
+
+export const GET = route(getSession);
+export const POST = route(postSession);
 

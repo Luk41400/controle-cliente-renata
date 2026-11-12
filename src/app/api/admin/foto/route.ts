@@ -2,13 +2,13 @@ import { createHash } from "node:crypto";
 import { isUuid } from "@/lib/clientes";
 import { normalizePhoto } from "@/lib/image-processing";
 import { PHOTO_BUCKET, photoPath } from "@/lib/photo-rules";
-import { body, failure, json, problem, RequestError } from "@/lib/server/http";
+import { body, failure, json, problem, RequestError, route } from "@/lib/server/http";
 import { requireLawyer, systemClient } from "@/lib/server/supabase";
 import { checkDatabase, tryCleanupPhotos } from "@/lib/server/client-lifecycle";
 
 export const maxDuration = 60;
 
-export async function POST(request: Request) {
+async function postPhoto(request: Request) {
   try {
     const { client, lawyer } = await requireLawyer();
     const input = await body(request, 3_000_000);
@@ -75,3 +75,5 @@ export async function POST(request: Request) {
     return failure(error);
   }
 }
+
+export const POST = route(postPhoto);

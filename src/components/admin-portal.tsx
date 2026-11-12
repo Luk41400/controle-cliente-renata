@@ -14,7 +14,8 @@ export function AdminPortal() {
   const [lawyer, setLawyer] = useState<Lawyer | null>();
   const [failure, setFailure] = useState("");
   const [retry, setRetry] = useState(0);
-  const exit = useCallback(() => setLawyer(null), []);
+  const [sessionNotice, setSessionNotice] = useState("");
+  const exit = useCallback((expired = true) => { setSessionNotice(expired ? "Sua sessão expirou. Entre novamente para continuar." : ""); setLawyer(null); }, []);
   const signedIn = Boolean(lawyer);
 
   useEffect(() => {
@@ -23,7 +24,10 @@ export function AdminPortal() {
       if (!request.signal.aborted) setLawyer(lawyer);
     }).catch((error) => {
       if (request.signal.aborted) return;
-      if (error instanceof ApiError && error.status === 401) setLawyer(null);
+      if (error instanceof ApiError && error.status === 401) {
+        if (error.code !== 'AUTH_REQUIRED') setSessionNotice(error.message);
+        setLawyer(null);
+      }
       else setFailure(errorMessage(error));
     });
     return () => request.abort();
@@ -52,7 +56,7 @@ export function AdminPortal() {
   }, [signedIn, exit]);
 
   if (lawyer) return <Dashboard key={`${lawyer.oab_uf}:${lawyer.oab_numero}`} lawyer={lawyer} onExit={exit} />;
-  if (lawyer === null) return <Login onLogin={setLawyer} />;
+  if (lawyer === null) return <Login notice={sessionNotice} onLogin={(value) => { setSessionNotice(""); setLawyer(value); }} />;
   return <main className="screen-state">
     <Brand />
     {failure ? <><p className="notice notice-error" role="alert">{failure}</p><button className="button primary" onClick={() => { setFailure(""); setRetry(retry + 1); }}>Tentar novamente</button></>
@@ -61,7 +65,7 @@ export function AdminPortal() {
   </main>;
 }
 
-function Login({ onLogin }: { onLogin: (lawyer: Lawyer) => void }) {
+function Login({ onLogin, notice }: { onLogin: (lawyer: Lawyer) => void; notice: string }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
 
@@ -94,6 +98,7 @@ function Login({ onLogin }: { onLogin: (lawyer: Lawyer) => void }) {
             <div className="field"><label htmlFor="uf">Estado da OAB (UF)</label><select id="uf" name="uf" defaultValue="" required><option value="" disabled>Selecione</option>{ufs.map((uf) => <option key={uf}>{uf}</option>)}</select></div>
             <div className="field field-wide"><label htmlFor="senha">Senha</label><input id="senha" name="senha" type="password" autoComplete="current-password" maxLength={256} required placeholder="Digite sua senha" /></div>
           </div>
+          {notice && !failure && <p className="notice" role="status">{notice}</p>}
           {failure && <p className="notice notice-error" role="alert">{failure}</p>}
           <button className="button primary login-submit">{busy ? "Entrando…" : "Entrar"}{busy ? <LoaderCircle size={18} className="spinner" aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}</button>
         </fieldset>

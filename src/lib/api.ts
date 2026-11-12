@@ -4,7 +4,7 @@ export const clientPath = "/api/admin/clientes";
 export type ClientActionResult = { message: string; pending?: boolean; operation?: string; id?: string };
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly fields: FieldErrors = {}) { super(message); }
+  constructor(message: string, readonly status: number, readonly fields: FieldErrors = {}, readonly code?: string, readonly requestId?: string) { super(message); }
 }
 
 export async function api<T>(path: string, data?: object, signal?: AbortSignal): Promise<T> {
@@ -16,7 +16,7 @@ export async function api<T>(path: string, data?: object, signal?: AbortSignal):
     signal,
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result) throw new ApiError(result?.message ?? "Não foi possível concluir a solicitação. Tente novamente.", response.status, result?.errors);
+  if (!response.ok || !result) throw new ApiError(result?.message ?? "Não foi possível concluir a solicitação. Tente novamente.", response.status, result?.errors, result?.code, response.headers.get('X-Request-Id') || undefined);
   return result;
 }
 
